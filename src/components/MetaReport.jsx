@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { capitalizar } from '../lib/formatacao'
 import PokemonSprite from './PokemonSprite'
+import ConfirmButton from './ConfirmButton'
 
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD
 
@@ -20,6 +22,7 @@ export default function MetaReport() {
   const [comoEnfrentar, setComoEnfrentar] = useState('')
   const [popularidade, setPopularidade] = useState(0)
   const [salvando, setSalvando] = useState(false)
+  const [erroForm, setErroForm] = useState('')
 
   async function carregar() {
     setLoading(true)
@@ -83,6 +86,7 @@ export default function MetaReport() {
     e.preventDefault()
     if (!pokemonNome.trim()) return
     setSalvando(true)
+    setErroForm('')
 
     try {
       const { data: existente, error: buscaErro } = await supabase
@@ -96,7 +100,7 @@ export default function MetaReport() {
       if (!pokemonId) {
         const { data: criado, error: criarErro } = await supabase
           .from('pokemons')
-          .insert({ nome: pokemonNome.trim() })
+          .insert({ nome: capitalizar(pokemonNome.trim()) })
           .select('id')
           .single()
         if (criarErro) throw criarErro
@@ -119,7 +123,7 @@ export default function MetaReport() {
       carregar()
     } catch (err) {
       console.error(err)
-      alert('Não consegui salvar essa entrada do meta report.')
+      setErroForm('Não consegui salvar essa entrada do meta report.')
     } finally {
       setSalvando(false)
     }
@@ -225,9 +229,9 @@ export default function MetaReport() {
                   <button className="btn btn-ghost btn-sm" onClick={() => handleEdit(item)}>
                     Editar
                   </button>
-                  <button className="btn btn-ghost btn-sm" onClick={() => handleRemove(item.id)}>
+                  <ConfirmButton onConfirm={() => handleRemove(item.id)} confirmLabel="Remover de vez">
                     Remover
-                  </button>
+                  </ConfirmButton>
                 </div>
               )}
             </div>
@@ -307,6 +311,7 @@ export default function MetaReport() {
                 </button>
               )}
             </div>
+            {erroForm && <p className="error-text">{erroForm}</p>}
           </form>
         </div>
       )}

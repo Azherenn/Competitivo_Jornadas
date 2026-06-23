@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { capitalizar } from '../lib/formatacao'
 import PokemonSprite from './PokemonSprite'
+import ConfirmButton from './ConfirmButton'
 
 const TIERS = ['S', 'A', 'B', 'C', 'D']
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD
@@ -23,6 +25,8 @@ export default function TierList() {
   const [novoPokemon, setNovoPokemon] = useState('')
   const [novoTier, setNovoTier] = useState('A')
   const [salvando, setSalvando] = useState(false)
+  const [erroTemporada, setErroTemporada] = useState('')
+  const [erroTierForm, setErroTierForm] = useState('')
 
   const temporadaAtual = temporadas.find((t) => t.id === temporadaSelecionada)
   const ehTemporadaAtualDoServidor = temporadaAtual?.eh_atual === true
@@ -86,6 +90,7 @@ export default function TierList() {
     e.preventDefault()
     if (!novaTemporadaNome.trim()) return
     setSalvando(true)
+    setErroTemporada('')
     try {
       const { data, error } = await supabase
         .from('temporadas')
@@ -96,12 +101,12 @@ export default function TierList() {
       setNovaTemporadaNome('')
       await carregarTemporadas()
       setTemporadaSelecionada(data.id)
+      setCriandoTemporada(false)
     } catch (err) {
       console.error(err)
-      alert('Não consegui criar a temporada. Talvez já exista uma com esse nome.')
+      setErroTemporada('Não consegui criar a temporada. Talvez já exista uma com esse nome.')
     } finally {
       setSalvando(false)
-      setCriandoTemporada(false)
     }
   }
 
@@ -109,6 +114,7 @@ export default function TierList() {
     e.preventDefault()
     if (!novoPokemon.trim() || !temporadaSelecionada) return
     setSalvando(true)
+    setErroTierForm('')
 
     try {
       const { data: existente, error: buscaErro } = await supabase
@@ -122,7 +128,7 @@ export default function TierList() {
       if (!pokemonId) {
         const { data: criado, error: criarErro } = await supabase
           .from('pokemons')
-          .insert({ nome: novoPokemon.trim() })
+          .insert({ nome: capitalizar(novoPokemon.trim()) })
           .select('id')
           .single()
         if (criarErro) throw criarErro
@@ -141,7 +147,7 @@ export default function TierList() {
       carregarTierList()
     } catch (err) {
       console.error(err)
-      alert('Não consegui salvar essa entrada da tier list.')
+      setErroTierForm('Não consegui salvar essa entrada da tier list.')
     } finally {
       setSalvando(false)
     }
@@ -204,9 +210,9 @@ export default function TierList() {
               <PokemonSprite nome={t.pokemons?.nome} size={36} />
               <span className="row-name">{t.pokemons?.nome}</span>
               {isAdmin && ehTemporadaAtualDoServidor && (
-                <button className="btn btn-ghost btn-sm" onClick={() => handleRemove(t.id)}>
+                <ConfirmButton onConfirm={() => handleRemove(t.id)} confirmLabel="Remover de vez">
                   Remover
-                </button>
+                </ConfirmButton>
               )}
             </div>
           ))
@@ -266,6 +272,7 @@ export default function TierList() {
                     Cancelar
                   </button>
                 </div>
+                {erroTemporada && <p className="error-text">{erroTemporada}</p>}
               </form>
             )}
           </div>
@@ -298,6 +305,7 @@ export default function TierList() {
                 <button className="btn" type="submit" disabled={salvando}>
                   {salvando ? 'Salvando…' : 'Salvar na tier list'}
                 </button>
+                {erroTierForm && <p className="error-text">{erroTierForm}</p>}
               </form>
             </div>
           ) : (

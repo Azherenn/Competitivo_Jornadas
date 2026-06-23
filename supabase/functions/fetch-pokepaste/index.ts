@@ -1,46 +1,50 @@
-// Follow this setup guide to integrate the Deno language server with your editor:
-// https://deno.land/manual/getting_started/setup_your_environment
-// This enables autocomplete, go to definition, etc.
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
-// Setup type definitions for built-in Supabase Runtime APIs
-import "@supabase/functions-js/edge-runtime.d.ts";
-import { withSupabase } from "@supabase/server";
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
 
-console.log("Hello from Functions!");
+serve(async (req) => {
+  // Responde ao preflight do CORS
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
 
-// This endpoint uses 'publishable' | 'secret' access, apiKey is required.
-// Use publishable for Client-facing, key-validated endpoints
-// Use secret for Server-to-server, internal calls
-export default {
-  fetch: withSupabase({ auth: ["publishable", "secret"] }, async (req, ctx) => {
-    // Called by another service with a secret key
-    // ctx.supabaseAdmin bypasses RLS — use for privileged operations
-    /*
-    if (ctx.authMode === "secret") {
-      const { user_id } = await req.json();
-      const { data } = await ctx.supabaseAdmin.auth.admin.getUserById(user_id);
-
-      return Response.json({
-        email: data?.user?.email,
-      });
+  try {
+    const { url } = await req.json()
+    if (!url || !url.includes('pokepast.es')) {
+      throw new Error('URL inválida do PokePaste')
     }
-    */
 
-    const { name } = await req.json();
+    // Pega o ID no final do link e monta a URL da versão "raw" (texto puro)
+    const pasteId = url.split('/').pop()
+    const rawUrl = `https://pokepast.es/raw/${pasteId}`
 
-    return Response.json({
-      message: `Hello ${name}!`,
-    });
-  }),
-};
+    const response = await fetch(rawUrl)
+    const text = await response.text()
 
-/* To invoke locally:
+    // Lógica para quebrar o texto e pegar os nomes
+    const blocks = text.split('\n\n').filter(b => b.trim().length > 0)
+    const team = blocks.map(block => {
+      const firstLine = block.split('\n')[0].trim()
+      // Remove itens (depois do @) e gêneros (M)/(F)
+      let namePart = firstLine.split('@')[0].split('(M)')[0].split('(F)')[0].trim()
+      
+      // Se tiver nickname ex: "Zezinho (Garchomp)", pega o que está entre parênteses
+      if (namePart.includes('(') && namePart.includes(')')) {
+         const match = namePart.match(/\(([^)]+)\)/)
+         if (match) return match[1].trim().toLowerCase()
+      }
+      return namePart.toLowerCase()
+    }).filter(n => n)
 
-  1. Run `supabase start` (see: https://supabase.com/docs/reference/cli/supabase-start)
-  2. Make an HTTP request:
-
-  curl -i --location --request POST 'http://127.0.0.1:54321/functions/v1/fetch-pokepaste' \
-    --header 'apiKey: sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH' \
-    --data '{"name":"Functions"}'
-
-*/
+    return new Response(JSON.stringify({ team }), { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    })
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), { 
+      status: 400, headers: corsHeaders 
+    })
+  }
+})

@@ -5,6 +5,7 @@ import TierList from './components/TierList'
 import MetaReport from './components/MetaReport'
 import Ranking from './components/Ranking'
 import ThemeSwitch from './components/ThemeSwitch'
+import SpriteStyleSwitch from './components/SpriteStyleSwitch'
 
 const TABS = [
   { id: 'registrar', label: 'Registrar' },
@@ -51,7 +52,10 @@ export default function App() {
           <h1 className="app-title">Dex Competitiva</h1>
           <p className="app-subtitle">Torneios, times e o estado do meta — tudo num lugar só.</p>
         </div>
-        <ThemeSwitch tema={tema} onChange={setTema} />
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
+          <ThemeSwitch tema={tema} onChange={setTema} />
+          <SpriteStyleSwitch />
+        </div>
       </header>
 
       <nav className="tabs">

@@ -303,6 +303,65 @@ input, select, textarea {
 }
 .chip button:hover { color: var(--danger); }
 
+/* ---------- Team builder (slots de pokémon com item/golpes) ---------- */
+
+.team-slot {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 8px;
+  background: var(--panel-raised);
+}
+
+.team-slot-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.team-slot-header input {
+  background: var(--panel);
+}
+
+.team-slot-details {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.team-slot-moves {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.team-slot-moves input {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 0.82rem;
+}
+
+.move-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: var(--panel-raised);
+  border: 1px solid var(--line);
+}
+
+.move-chip .move-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
 .btn {
   background: var(--accent);
   color: var(--accent-ink);

@@ -1,8 +1,57 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { capitalizar } from '../lib/formatacao'
 import TagInput from './TagInput'
+import TeamBuilder from './TeamBuilder'
 
 const COLOCACOES = ['Campeão', 'Vice', 'Top 4', 'Top 8', 'Fase de grupos', 'Outro']
+
+function timeVazio() {
+  return []
+}
+
+// Extrai nome + item + golpes de um texto no formato de export do
+// Pokémon Showdown / PokePaste. Cada pokémon é um bloco separado por
+// linha(s) vazia(s):
+//
+//   Talonflame @ Flyinium Z
+//   Ability: Gale Wings
+//   EVs: 252 Atk / 4 Def / 252 Spe
+//   Jolly Nature
+//   - Brave Bird
+//   - Flare Blitz
+//   - Swords Dance
+//   - Roost
+//
+// Nicknames aparecem como "Nickname (NomeReal) @ Item" — nesse caso
+// usamos o nome real entre parênteses, não o nickname.
+function extrairTimeDoPaste(texto) {
+  const blocos = texto
+    .split(/\n\s*\n/)
+    .map((b) => b.trim())
+    .filter(Boolean)
+
+  return blocos.map((bloco) => {
+    const linhas = bloco.split(/\r?\n/).map((l) => l.trim())
+    const primeiraLinha = linhas[0]
+
+    const [parteNome, parteItem] = primeiraLinha.split(' @ ')
+
+    let nomeBruto = parteNome.replace(/\s*\((M|F)\)\s*$/, '').trim()
+    const matchNickname = nomeBruto.match(/\(([^)]+)\)\s*$/)
+    const nome = capitalizar(matchNickname ? matchNickname[1] : nomeBruto)
+
+    const item = parteItem ? capitalizar(parteItem.trim()) : ''
+
+    const golpes = linhas
+      .filter((l) => l.startsWith('- '))
+      .map((l) => capitalizar(l.slice(2).trim()))
+      .slice(0, 4)
+    while (golpes.length < 4) golpes.push('')
+
+    return { nome, item, golpes }
+  })
+}
 
 export default function RegistroTorneio({ onSaved }) {
   const [nomeTorneio, setNomeTorneio] = useState('')
@@ -10,71 +59,63 @@ export default function RegistroTorneio({ onSaved }) {
   const [formato, setFormato] = useState('singles')
   const [nick, setNick] = useState('')
   const [colocacao, setColocacao] = useState('')
-  const [timeUsado, setTimeUsado] = useState([])
+  const [time, setTime] = useState(timeVazio)
   const [maisVistos, setMaisVistos] = useState([])
   const [observacoes, setObservacoes] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
   const [linkPokePaste, setLinkPokePaste] = useState('')
-  
-const handlePokePasteSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!linkPokePaste || !linkPokePaste.includes('pokepast.es')) {
-      alert("Por favor, insira um link válido do PokePaste.");
-      return;
+  const [buscandoPaste, setBuscandoPaste] = useState(false)
+  const [pasteErro, setPasteErro] = useState('')
+  const [pasteSucesso, setPasteSucesso] = useState(false)
+
+  async function handleBuscarPokePaste() {
+    setPasteErro('')
+    setPasteSucesso(false)
+
+    if (!linkPokePaste.trim() || !linkPokePaste.includes('pokepast.es')) {
+      setPasteErro('Cole um link válido do pokepast.es antes de buscar.')
+      return
     }
 
+    setBuscandoPaste(true)
     try {
-      // Pega o ID no final do link (ignorando barras no final, se o usuário colocar)
-      const pasteId = linkPokePaste.split('/').filter(Boolean).pop();
-      
-      // A URL CORRETA (E COM CORS LIBERADO NATIVAMENTE PELO POKEPASTE!!!)
-      const rawUrl = `https://pokepast.es/${pasteId}/raw`;
+      const pasteId = linkPokePaste.trim().split('/').filter(Boolean).pop()
+      const rawUrl = `https://pokepast.es/${pasteId}/raw`
 
-      // Chamada direta e simples
-      const response = await fetch(rawUrl);
-      
-      if (response.status === 404) {
-          alert("Opa! Agora sim o site disse que o link não existe.");
-          return;
+      const resp = await fetch(rawUrl)
+      if (resp.status === 404) {
+        throw new Error('Não encontrei esse paste. Verifique se o link está certo.')
       }
-      
-      if (!response.ok) throw new Error("Falha na rede.");
+      if (!resp.ok) {
+        throw new Error('Não consegui acessar o PokePaste agora. Tente de novo em um instante.')
+      }
 
-      const text = await response.text();
+      const texto = await resp.text()
+      const novoTime = extrairTimeDoPaste(texto)
 
-   
-      const blocks = text.split(/\n\s*\n/).filter(b => b.trim().length > 0);
-      
-      const team = blocks.map(block => {
- 
-        const firstLine = block.split(/\r?\n/)[0].trim();
-        
-        let namePart = firstLine.split('@')[0].split('(M)')[0].split('(F)')[0].trim();
-        
-        if (namePart.includes('(') && namePart.includes(')')) {
-           const match = namePart.match(/\(([^)]+)\)/);
-           if (match) return match[1].trim().toLowerCase();
-        }
-        return namePart.toLowerCase();
-      }).filter(n => n);
+      if (novoTime.length === 0) {
+        throw new Error('Não consegui identificar pokémons nesse paste.')
+      }
 
-      setTimeUsado(team);
-      setLinkPokePaste('');
-
-    } catch (error) {
-      console.error("Erro ao buscar time:", error);
-      alert("Erro ao puxar o time. Verifique o console.");
+      setTime(novoTime.slice(0, 6))
+      setLinkPokePaste('')
+      setPasteSucesso(true)
+    } catch (err) {
+      setPasteErro(err.message || 'Erro ao buscar o time. Tente de novo.')
+    } finally {
+      setBuscandoPaste(false)
     }
-  };
+  }
 
   function resetForm() {
     setNomeTorneio('')
     setColocacao('')
-    setTimeUsado([])
+    setTime(timeVazio())
     setMaisVistos([])
     setObservacoes('')
+    setPasteSucesso(false)
     // mantém nick, data e formato pra facilitar registrar vários jogos seguidos
   }
 
@@ -120,12 +161,26 @@ const handlePokePasteSubmit = async (e) => {
         torneioId = novoTorneio.id
       }
 
-      // 2. Insere o registro do jogador
+      // 2. Monta o time estruturado (limpa slots sem nome, e golpes vazios)
+      const timeLimpo = time
+        .filter((slot) => slot.nome?.trim())
+        .map((slot) => ({
+          nome: capitalizar(slot.nome),
+          item: slot.item?.trim() ? capitalizar(slot.item.trim()) : null,
+          golpes: (slot.golpes ?? []).map((g) => capitalizar(g.trim())).filter(Boolean),
+        }))
+
+      // mantém a coluna antiga (time_usado) preenchida só com os nomes,
+      // pra qualquer leitura legada que ainda dependa dela.
+      const nomesTime = timeLimpo.map((p) => p.nome)
+
+      // 3. Insere o registro do jogador
       const { error: registroErro } = await supabase.from('registros').insert({
         torneio_id: torneioId,
         nick_jogador: nick.trim(),
-        time_usado: timeUsado,
-        mais_vistos: maisVistos,
+        time_usado: nomesTime,
+        time_estruturado: timeLimpo,
+        mais_vistos: maisVistos.map(capitalizar),
         colocacao: colocacao || null,
         observacoes: observacoes.trim() || null,
       })
@@ -194,27 +249,34 @@ const handlePokePasteSubmit = async (e) => {
       </div>
 
       <div className="field">
-        <label>Importar do PokePaste (Opcional)</label>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <input 
-            type="url" 
-            placeholder="https://pokepast.es/..." 
+        <label>Importar do PokePaste (opcional)</label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            type="url"
+            placeholder="https://pokepast.es/..."
             value={linkPokePaste}
             onChange={(e) => setLinkPokePaste(e.target.value)}
             style={{ flex: 1 }}
           />
-          <button type="button" onClick={handlePokePasteSubmit} className="btn" style={{ padding: '0 16px' }}>
-            Buscar Time
+          <button
+            type="button"
+            onClick={handleBuscarPokePaste}
+            className="btn"
+            disabled={buscandoPaste}
+            style={{ whiteSpace: 'nowrap' }}
+          >
+            {buscandoPaste ? 'Buscando…' : 'Buscar time'}
           </button>
         </div>
+        {pasteErro && <p className="error-text">{pasteErro}</p>}
+        {pasteSucesso && (
+          <p className="row-meta" style={{ color: 'var(--moss)', marginTop: 6 }}>
+            Time importado! Confira abaixo e ajuste se precisar.
+          </p>
+        )}
       </div>
 
-      <TagInput
-        label="Seu time"
-        values={timeUsado}
-        onChange={setTimeUsado}
-        placeholder="Digite um pokémon e Enter"
-      />
+      <TeamBuilder time={time} onChange={setTime} />
 
       <TagInput
         label="Pokémons que você mais viu no torneio"
