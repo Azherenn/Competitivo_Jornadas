@@ -15,6 +15,59 @@ export default function RegistroTorneio({ onSaved }) {
   const [observacoes, setObservacoes] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [linkPokePaste, setLinkPokePaste] = useState('')
+  
+const handlePokePasteSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!linkPokePaste || !linkPokePaste.includes('pokepast.es')) {
+      alert("Por favor, insira um link válido do PokePaste.");
+      return;
+    }
+
+    try {
+      // Pega o ID no final do link (ignorando barras no final, se o usuário colocar)
+      const pasteId = linkPokePaste.split('/').filter(Boolean).pop();
+      
+      // A URL CORRETA (E COM CORS LIBERADO NATIVAMENTE PELO POKEPASTE!!!)
+      const rawUrl = `https://pokepast.es/${pasteId}/raw`;
+
+      // Chamada direta e simples
+      const response = await fetch(rawUrl);
+      
+      if (response.status === 404) {
+          alert("Opa! Agora sim o site disse que o link não existe.");
+          return;
+      }
+      
+      if (!response.ok) throw new Error("Falha na rede.");
+
+      const text = await response.text();
+
+   
+      const blocks = text.split(/\n\s*\n/).filter(b => b.trim().length > 0);
+      
+      const team = blocks.map(block => {
+ 
+        const firstLine = block.split(/\r?\n/)[0].trim();
+        
+        let namePart = firstLine.split('@')[0].split('(M)')[0].split('(F)')[0].trim();
+        
+        if (namePart.includes('(') && namePart.includes(')')) {
+           const match = namePart.match(/\(([^)]+)\)/);
+           if (match) return match[1].trim().toLowerCase();
+        }
+        return namePart.toLowerCase();
+      }).filter(n => n);
+
+      setTimeUsado(team);
+      setLinkPokePaste('');
+
+    } catch (error) {
+      console.error("Erro ao buscar time:", error);
+      alert("Erro ao puxar o time. Verifique o console.");
+    }
+  };
 
   function resetForm() {
     setNomeTorneio('')
@@ -138,6 +191,22 @@ export default function RegistroTorneio({ onSaved }) {
             </option>
           ))}
         </select>
+      </div>
+
+      <div className="field">
+        <label>Importar do PokePaste (Opcional)</label>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <input 
+            type="url" 
+            placeholder="https://pokepast.es/..." 
+            value={linkPokePaste}
+            onChange={(e) => setLinkPokePaste(e.target.value)}
+            style={{ flex: 1 }}
+          />
+          <button type="button" onClick={handlePokePasteSubmit} className="btn" style={{ padding: '0 16px' }}>
+            Buscar Time
+          </button>
+        </div>
       </div>
 
       <TagInput

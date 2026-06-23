@@ -1,0 +1,2 @@
+[functions.fetch-pokepaste]
+verify_jwt = false
